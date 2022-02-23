@@ -31,4 +31,3 @@ class DirectorCountSerialize(serializers.ModelSerializer):
 
     def get_movie_count(self, movie):
         return movie.all().count()
-
