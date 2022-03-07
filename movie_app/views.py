@@ -1,8 +1,10 @@
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
-from movie_app.serializers import DirectorSerializer, MovieSerializer, ReviewSerializer
+from movie_app.serializers import DirectorSerializer, MovieSerializer, ReviewSerializer, \
+    DirectorCreatUpdateSerializer
 from movie_app.models import Director, Movie, Review
 from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
 
 
 @api_view(['GET', 'POST'])
@@ -12,7 +14,10 @@ def directors_list_view(request):
         data = DirectorSerializer(director, many=True).data
         return Response(data=data)
     elif request.method == 'POST':
-        print(request.data)
+        serializer = DirectorCreatUpdateSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(data={'errors': serializer.errors},
+                            status=status.HTTP_406_NOT_ACCEPTABLE)
         name = request.data.get('name')
         director = Director.objects.create(name=name)
         return Response(data=DirectorSerializer(director).data,
@@ -118,3 +123,44 @@ def movies_reviews_view(request):
     movie_reviews = Movie.objects.all()
     data = MovieSerializer(movie_reviews, many=True).data
     return Response(data=data)
+
+
+from django.contrib.auth import authenticate
+from rest_framework.authtoken.models import Token
+
+
+@api_view(['POST'])
+def authorization(request):
+    if request.method == 'POST':
+        username = request.data.get('username')  # admin
+        password = request.data.get('password')  # admin
+        user = authenticate(username=username, password=password)
+        if user:
+            Token.objects.filter(user=user).delete()
+            token = Token.objects.create(user=user)
+            return Response(data={'key': token.key})
+        return Response(data={'error': 'User not found'},
+                        status=status.HTTP_404_NOT_FOUND)
+
+
+from django.contrib.auth.models import User
+
+
+@api_view(['POST'])
+def registration(request):
+    if request.method == 'POST':
+        username = request.data.get('username')
+        password = request.data.get('password')
+        User.objects.create_user(username=username, password=password)
+        return Response(data={'message': 'User created'},
+                        status=status.HTTP_201_CREATED)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def user_reviews(request):
+    reviews = Review.objects.filter(author=request.user)
+    serializer = ReviewSerializer(reviews, many=True)
+    return Response(data=serializer.data)
+
+
